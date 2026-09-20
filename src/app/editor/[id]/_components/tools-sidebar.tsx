@@ -1,21 +1,31 @@
-import { Type, Scissors } from "lucide-react";
+import { Type, Scissors, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+const TOOLS = [
+  { icon: Type, label: "ใส่ซับไตเติลอัตโนมัติ" },
+  { icon: Scissors, label: "ลบช่วงเงียบ" },
+  { icon: Wand2, label: "ไฮไลต์อัตโนมัติ" },
+];
 
 export function ToolsSidebar() {
   return (
-    <aside className="w-64 border-r border-slate-800 bg-slate-900/50 flex flex-col">
-      <div className="p-4 border-b border-slate-800">
-        <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wider">AI Tools</h2>
+    <aside className="w-60 border-r border-border bg-sidebar flex flex-col shrink-0">
+      <div className="h-10 flex items-center px-4 border-b border-border shrink-0">
+        <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          เครื่องมือ AI
+        </h2>
       </div>
-      <div className="p-4 flex flex-col gap-2">
-        <Button variant="ghost" className="justify-start gap-3 text-slate-300 hover:text-white hover:bg-slate-800">
-          <Type className="w-4 h-4" />
-          Auto Subtitles
-        </Button>
-        <Button variant="ghost" className="justify-start gap-3 text-slate-300 hover:text-white hover:bg-slate-800">
-          <Scissors className="w-4 h-4" />
-          Remove Silence
-        </Button>
+      <div className="p-2 flex flex-col gap-1">
+        {TOOLS.map(({ icon: Icon, label }) => (
+          <Button
+            key={label}
+            variant="ghost"
+            className="justify-start gap-3 h-9 px-3 font-normal text-muted-foreground hover:text-foreground"
+          >
+            <Icon className="w-4 h-4" />
+            {label}
+          </Button>
+        ))}
       </div>
     </aside>
   );

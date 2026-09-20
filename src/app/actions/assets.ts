@@ -4,32 +4,8 @@ import { randomUUID } from "crypto";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { assertProjectOwner } from "@/lib/supabase/authz";
 import { r2Client, R2_BUCKET_NAME } from "@/lib/r2/client";
-
-async function assertProjectOwner(projectId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Not authenticated");
-  }
-
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id")
-    .eq("id", projectId)
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (!project) {
-    throw new Error("Project not found");
-  }
-
-  return { supabase, user };
-}
 
 export async function createUploadUrl(
   projectId: string,
@@ -59,11 +35,13 @@ export async function confirmAssetUpload({
   storageKey,
   type,
   fileSize,
+  duration,
 }: {
   projectId: string;
   storageKey: string;
   type: string;
   fileSize: number;
+  duration?: number;
 }) {
   const { supabase } = await assertProjectOwner(projectId);
 
@@ -72,6 +50,7 @@ export async function confirmAssetUpload({
     type,
     storage_key: storageKey,
     file_size: fileSize,
+    duration,
   });
 
   if (error) {

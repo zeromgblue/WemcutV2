@@ -5,6 +5,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export function formatTimecode(seconds: number): string {
+  const safeSeconds = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
+  const minutes = Math.floor(safeSeconds / 60);
+  const wholeSeconds = Math.floor(safeSeconds % 60);
+  return `${minutes.toString().padStart(2, "0")}:${wholeSeconds.toString().padStart(2, "0")}`;
+}
+
 export function formatRelativeTime(date: string | Date): string {
   const then = typeof date === "string" ? new Date(date) : date;
   const seconds = Math.floor((Date.now() - then.getTime()) / 1000);
