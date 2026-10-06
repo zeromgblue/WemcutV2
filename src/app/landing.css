@@ -1,0 +1,237 @@
+/* Landing page ("/") — near-black canvas, rust-red accent, logo intro. */
+
+.lp {
+  --lp-bg: #0a0a0a;
+  --lp-red: #e5483b;
+  --lp-line: rgba(255, 255, 255, 0.08);
+  --lp-text: #ffffff;
+  --lp-text-2: rgba(255, 255, 255, 0.5);
+  --lp-text-3: rgba(255, 255, 255, 0.28);
+  /* When the intro overlay has cleared and the page itself starts animating in. */
+  --lp-intro: 2.5s;
+
+  background: var(--lp-bg);
+  color: var(--lp-text);
+  font-family: var(--font-plex-thai), ui-sans-serif, system-ui, sans-serif;
+}
+
+.lp-brand {
+  font-family: var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.lp-mono {
+  font-family: var(--font-plex-mono), var(--font-plex-thai), ui-monospace, monospace;
+}
+
+.lp-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* ── Intro overlay ─────────────────────────────────────── */
+.lp-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--lp-bg);
+  animation: lp-intro-out 0.55s cubic-bezier(0.7, 0, 0.3, 1) 2.2s forwards;
+}
+
+.lp-intro::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 560px;
+  height: 420px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, rgba(190, 50, 25, 0.22), transparent);
+  opacity: 0;
+  animation: lp-fade 1.2s ease-out 0.2s forwards;
+}
+
+.lp-intro-logo {
+  position: relative;
+  font-size: clamp(3.5rem, 9vw, 7rem);
+  line-height: 1;
+  padding: 0.1em 0.04em;
+  clip-path: inset(0 100% 0 0);
+  animation: lp-wipe 0.85s cubic-bezier(0.65, 0, 0.35, 1) 0.25s forwards;
+}
+
+.lp-intro-rule {
+  position: relative;
+  width: min(440px, 60vw);
+  height: 1px;
+  margin-top: 1.75rem;
+  background: linear-gradient(90deg, transparent, rgba(229, 72, 59, 0.75), transparent);
+  transform: scaleX(0);
+  animation: lp-rule 0.7s cubic-bezier(0.16, 1, 0.3, 1) 1.05s forwards;
+}
+
+.lp-intro-tag {
+  position: relative;
+  margin-top: 1.1rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.32em;
+  color: rgba(255, 255, 255, 0.32);
+  opacity: 0;
+  animation: lp-fade 0.6s ease-out 1.25s forwards;
+}
+
+@keyframes lp-wipe {
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes lp-rule {
+  to { transform: scaleX(1); }
+}
+@keyframes lp-fade {
+  to { opacity: 1; }
+}
+@keyframes lp-intro-out {
+  to { opacity: 0; transform: translateY(-9vh); visibility: hidden; }
+}
+
+/* ── Page entrance (after intro) ───────────────────────── */
+.lp-enter {
+  opacity: 0;
+  animation: lp-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) calc(var(--lp-intro) + var(--d, 0s)) forwards;
+}
+.lp-nav {
+  opacity: 0;
+  animation: lp-drop 0.7s cubic-bezier(0.16, 1, 0.3, 1) calc(var(--lp-intro) + 0.2s) forwards;
+}
+
+@keyframes lp-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes lp-drop {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Hero cursor glow ──────────────────────────────────── */
+.lp-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 9999px;
+  transform: translate3d(calc(var(--x, 72vw) - 50%), calc(var(--y, 32vh) - 50%), 0);
+  will-change: transform;
+}
+.lp-glow-near {
+  width: 760px;
+  height: 760px;
+  background: radial-gradient(closest-side, rgba(200, 55, 28, 0.34), rgba(150, 40, 20, 0.12) 55%, transparent);
+}
+.lp-glow-far {
+  width: 1100px;
+  height: 1100px;
+  background: radial-gradient(closest-side, rgba(150, 45, 20, 0.16), transparent);
+}
+
+/* ── Buttons ───────────────────────────────────────────── */
+.lp-btn-solid {
+  background: #fff;
+  color: #0a0a0a;
+  box-shadow: 0 0 40px -6px rgba(255, 255, 255, 0.28), 0 12px 30px -12px rgba(0, 0, 0, 0.8);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.lp-btn-solid:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 54px -4px rgba(255, 255, 255, 0.4), 0 12px 30px -12px rgba(0, 0, 0, 0.8);
+}
+.lp-btn-ghost {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+.lp-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.lp-btn-solid svg,
+.lp-btn-ghost svg {
+  transition: transform 0.25s ease;
+}
+.lp-btn-solid:hover svg,
+.lp-btn-ghost:hover svg {
+  transform: translateX(3px);
+}
+
+/* ── Feature cells ─────────────────────────────────────── */
+.lp-cell {
+  position: relative;
+  overflow: hidden;
+  transition: background 0.4s ease;
+}
+.lp-cell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 75% 85% at 50% 25%, rgba(200, 55, 28, 0.2), transparent 72%);
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  pointer-events: none;
+}
+.lp-cell::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--lp-red);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.lp-cell:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+.lp-cell:hover::before {
+  opacity: 1;
+}
+.lp-cell:hover::after {
+  transform: scaleX(1);
+}
+.lp-cell-icon {
+  border: 1px solid var(--lp-line);
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 0.3s ease, border-color 0.3s ease, background 0.3s ease;
+}
+.lp-cell:hover .lp-cell-icon {
+  color: var(--lp-red);
+  border-color: rgba(229, 72, 59, 0.4);
+  background: rgba(229, 72, 59, 0.1);
+}
+
+/* ── Step rows ─────────────────────────────────────────── */
+.lp-step-num {
+  color: var(--lp-text-3);
+  transition: color 0.3s ease;
+}
+.lp-step:hover .lp-step-num {
+  color: var(--lp-red);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-intro {
+    display: none;
+  }
+  .lp-enter,
+  .lp-nav {
+    opacity: 1;
+    animation: none;
+  }
+}
