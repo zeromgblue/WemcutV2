@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { assertProjectOwner } from "@/lib/supabase/authz";
+import type { SubtitleSegment } from "./subtitles";
+import { DEFAULT_SUBTITLE_STYLE, type SubtitleStyle } from "@/lib/subtitle-style";
 
 export type TimelineClip = {
   id: string;
@@ -10,7 +12,12 @@ export type TimelineClip = {
   end: number;
 };
 
-export async function saveTimeline(projectId: string, clips: TimelineClip[]) {
+export async function saveTimeline(
+  projectId: string,
+  clips: TimelineClip[],
+  subtitles: SubtitleSegment[] = [],
+  subtitleStyle: SubtitleStyle = DEFAULT_SUBTITLE_STYLE
+) {
   const { supabase } = await assertProjectOwner(projectId);
 
   const { data: latest } = await supabase
@@ -26,7 +33,7 @@ export async function saveTimeline(projectId: string, clips: TimelineClip[]) {
   const { error } = await supabase.from("timelines").insert({
     project_id: projectId,
     version: nextVersion,
-    timeline_json: { clips },
+    timeline_json: { clips, subtitles, subtitleStyle },
   });
 
   if (error) {

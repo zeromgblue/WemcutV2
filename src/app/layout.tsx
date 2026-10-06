@@ -1,11 +1,23 @@
 import type { Metadata } from "next";
-import { Kanit } from "next/font/google";
+import { Kanit, Prompt, Sarabun } from "next/font/google";
 import "./globals.css";
 
 const kanit = Kanit({
   variable: "--font-kanit",
   subsets: ["latin", "thai"],
   weight: ["300", "400", "500", "600", "700"],
+});
+
+const prompt = Prompt({
+  variable: "--font-prompt",
+  subsets: ["latin", "thai"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const sarabun = Sarabun({
+  variable: "--font-sarabun",
+  subsets: ["latin", "thai"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -17,7 +29,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="th"
-      className={`${kanit.variable} h-full antialiased dark`}
+      className={`${kanit.variable} ${prompt.variable} ${sarabun.variable} h-full antialiased dark`}
       style={{ colorScheme: "dark" }}
     >
       <body className="min-h-full flex flex-col font-sans bg-background text-foreground">{children}</body>

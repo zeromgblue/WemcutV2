@@ -129,7 +129,8 @@ function SectionHeading({ eyebrow, title, sub, center = true }: {
   return (
     <div className={`flex flex-col gap-4 max-w-2xl ${center ? "items-center text-center mx-auto" : "items-start"}`}>
       <Rule center={center} />
-      <Eyebrow>{eyebrow}</Eyebrow>
+      <Eyebrow>{eyebrow}</Eyebrow>/u/u
+      
       <h2 className="font-heading text-3xl sm:text-4xl font-medium tracking-tight leading-tight" style={{ color: T.cream }}>
         {title}
       </h2>

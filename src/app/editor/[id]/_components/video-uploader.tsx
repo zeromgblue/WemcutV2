@@ -5,23 +5,8 @@ import { useRouter } from "next/navigation";
 import { UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { probeDuration } from "@/lib/probe-duration";
 import { createUploadUrl, confirmAssetUpload } from "@/app/actions/assets";
-
-function probeDuration(file: File): Promise<number | undefined> {
-  return new Promise((resolve) => {
-    const video = document.createElement("video");
-    video.preload = "metadata";
-    video.onloadedmetadata = () => {
-      URL.revokeObjectURL(video.src);
-      resolve(Number.isFinite(video.duration) ? video.duration : undefined);
-    };
-    video.onerror = () => {
-      URL.revokeObjectURL(video.src);
-      resolve(undefined);
-    };
-    video.src = URL.createObjectURL(file);
-  });
-}
 
 export function VideoUploader({ projectId }: { projectId: string }) {
   const router = useRouter();

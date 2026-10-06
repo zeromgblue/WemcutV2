@@ -4,6 +4,8 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createClient } from "@/lib/supabase/server";
 import { r2Client, R2_BUCKET_NAME } from "@/lib/r2/client";
 import type { TimelineClip } from "@/app/actions/timeline";
+import type { SubtitleSegment } from "@/app/actions/subtitles";
+import { DEFAULT_SUBTITLE_STYLE, migrateSubtitleStyle, type SubtitleStyle } from "@/lib/subtitle-style";
 import { EditorWorkspace } from "./_components/editor-workspace";
 
 export default async function EditorPage({ params }: PageProps<"/editor/[id]">) {
@@ -44,25 +46,35 @@ export default async function EditorPage({ params }: PageProps<"/editor/[id]">) 
   const rawClips = timeline?.timeline_json?.clips;
   const initialClips: TimelineClip[] = Array.isArray(rawClips) ? rawClips : [];
 
-  const firstAsset = assets?.[0] ?? null;
-  const videoUrl = firstAsset
-    ? await getSignedUrl(
+  const rawSubtitles = timeline?.timeline_json?.subtitles;
+  const initialSubtitles: SubtitleSegment[] = Array.isArray(rawSubtitles) ? rawSubtitles : [];
+
+  const rawSubtitleStyle = timeline?.timeline_json?.subtitleStyle;
+  const initialSubtitleStyle: SubtitleStyle =
+    rawSubtitleStyle && typeof rawSubtitleStyle === "object"
+      ? migrateSubtitleStyle(rawSubtitleStyle as Record<string, unknown>)
+      : DEFAULT_SUBTITLE_STYLE;
+
+  const editorAssets = await Promise.all(
+    (assets ?? []).map(async (a) => ({
+      id: a.id as string,
+      duration: a.duration as number | null,
+      videoUrl: await getSignedUrl(
         r2Client,
-        new GetObjectCommand({
-          Bucket: R2_BUCKET_NAME,
-          Key: firstAsset.storage_key,
-        }),
+        new GetObjectCommand({ Bucket: R2_BUCKET_NAME, Key: a.storage_key }),
         { expiresIn: 3600 }
-      )
-    : null;
+      ),
+    }))
+  );
 
   return (
     <EditorWorkspace
       projectId={id}
       projectName={project.name}
-      videoUrl={videoUrl}
-      asset={firstAsset ? { id: firstAsset.id, duration: firstAsset.duration } : null}
+      assets={editorAssets}
       initialClips={initialClips}
+      initialSubtitles={initialSubtitles}
+      initialSubtitleStyle={initialSubtitleStyle}
     />
   );
 }
