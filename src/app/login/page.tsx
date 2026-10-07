@@ -1,68 +1,93 @@
+import { Suspense } from "react";
 import Link from "next/link";
-import { Scissors } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { loginWithGoogle } from "@/app/actions/auth";
-import { Button } from "@/components/ui/button";
+import { CursorGlow } from "../_components/cursor-glow";
+import { landingFonts } from "../fonts";
+import { GoogleButton } from "./_components/google-button";
+import { LoginError } from "./_components/login-error";
+import "../landing.css";
 
-function GoogleIcon() {
+const PERKS = ["ไม่ต้องตั้งรหัสผ่าน", "สมัครและเข้าใช้ในคลิกเดียว", "เริ่มใช้งานได้ทันที"];
+
+export default function LoginPage() {
   return (
-    <svg viewBox="0 0 24 24" className="w-4 h-4" aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47a5.53 5.53 0 0 1-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82Z"
+    <div className={`lp relative flex min-h-screen flex-col overflow-hidden ${landingFonts}`}>
+      <CursorGlow />
+      <div className="lp-grid absolute inset-0 pointer-events-none" />
+      <div
+        className="absolute inset-x-0 bottom-0 h-72 pointer-events-none"
+        style={{ background: "linear-gradient(to top, rgba(150,38,20,0.2), transparent)" }}
       />
-      <path
-        fill="#34A853"
-        d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11A12 12 0 0 0 12 24Z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.27 14.28A7.2 7.2 0 0 1 4.89 12c0-.79.14-1.56.38-2.28V6.61H1.27A12 12 0 0 0 0 12c0 1.94.46 3.77 1.27 5.39l4-3.11Z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 4.77c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.61l4 3.11C6.22 6.88 8.87 4.77 12 4.77Z"
-      />
-    </svg>
-  );
-}
 
-export default async function LoginPage({
-  searchParams,
-}: PageProps<"/login">) {
-  const { error } = await searchParams;
+      <header className="relative">
+        <div className="max-w-6xl mx-auto px-6 h-[68px] flex items-center justify-between">
+          <Link href="/" className="lp-brand text-lg">
+            WemCut
+          </Link>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-sm transition-colors hover:text-white"
+            style={{ color: "var(--lp-text-2)" }}
+          >
+            <ArrowLeft className="h-4 w-4" /> กลับหน้าแรก
+          </Link>
+        </div>
+      </header>
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-6 py-16">
-      <div className="w-full max-w-sm space-y-8 text-center">
-        <Link href="/" className="flex items-center justify-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-amber-400 to-amber-700">
-            <Scissors className="w-4 h-4 text-black" />
+      <main className="relative flex flex-1 items-center justify-center px-6 pb-24 pt-10">
+        <div className="lp-rise w-full max-w-[26rem]">
+          <div
+            className="lp-card relative overflow-hidden p-9 sm:p-10 text-center"
+            style={{ border: "1px solid var(--lp-line)", background: "rgba(12,10,10,0.72)" }}
+          >
+            <span
+              className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold"
+              style={{
+                border: "1px solid rgba(255,255,255,0.1)",
+                background: "rgba(255,255,255,0.04)",
+                color: "rgba(255,255,255,0.6)",
+              }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--lp-red)" }} />
+              เข้าสู่ระบบ
+            </span>
+
+            <h1 className="mt-7 text-[2rem] font-bold leading-[1.25] tracking-tight">
+              ยินดีต้อนรับ
+              <br />
+              <span style={{ color: "rgba(255,255,255,0.32)" }}>สู่ WemCut</span>
+            </h1>
+            <p className="mt-4 text-sm leading-relaxed" style={{ color: "var(--lp-text-2)" }}>
+              เข้าสู่ระบบหรือสมัครสมาชิกด้วยบัญชี Google แล้วให้ AI ตัดคลิปแทนคุณได้เลย
+            </p>
+
+            <form action={loginWithGoogle} className="mt-9">
+              <GoogleButton />
+            </form>
+
+            <Suspense fallback={null}>
+              <LoginError />
+            </Suspense>
+
+            <ul
+              className="mt-9 space-y-2.5 pt-7 text-left text-xs"
+              style={{ borderTop: "1px solid var(--lp-line)", color: "var(--lp-text-2)" }}
+            >
+              {PERKS.map((p) => (
+                <li key={p} className="flex items-center gap-3">
+                  <span className="h-1 w-1 rounded-full" style={{ background: "var(--lp-red)" }} />
+                  {p}
+                </li>
+              ))}
+            </ul>
           </div>
-          <span className="text-lg font-medium tracking-tight">
-            Wem<span className="text-amber-500">Cut</span>
-          </span>
-        </Link>
 
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold">เข้าสู่ระบบ WemCut</h1>
-          <p className="text-sm text-muted-foreground">
-            เข้าสู่ระบบหรือสมัครสมาชิกด้วยบัญชี Google
+          <p className="lp-mono mt-6 text-center text-[10px] tracking-[0.28em]" style={{ color: "var(--lp-text-3)" }}>
+            AI-POWERED VIDEO EDITOR
           </p>
         </div>
-
-        <form action={loginWithGoogle}>
-          <Button type="submit" variant="outline" className="w-full gap-2.5">
-            <GoogleIcon />
-            เข้าสู่ระบบด้วย Google
-          </Button>
-        </form>
-
-        {error && (
-          <p className="text-sm text-destructive">
-            เข้าสู่ระบบไม่สำเร็จ: {error}
-          </p>
-        )}
-      </div>
+      </main>
     </div>
   );
 }

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Plus, FolderOpen } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/server";
+import { SubmitButton } from "@/components/submit-button";
+import { getAuthUser } from "@/lib/supabase/server";
 import { logout } from "@/app/actions/auth";
 import { createProject } from "@/app/actions/projects";
 import { formatRelativeTime } from "@/lib/utils";
@@ -11,10 +11,7 @@ export default async function DashboardPage({
   searchParams,
 }: PageProps<"/dashboard">) {
   const { error } = await searchParams;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getAuthUser();
 
   if (!user) {
     redirect("/login");
@@ -36,22 +33,20 @@ export default async function DashboardPage({
           </div>
           <div className="flex items-center gap-3">
             <form action={createProject}>
-              <Button
-                type="submit"
+              <SubmitButton
                 className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2"
               >
                 <Plus className="w-4 h-4" />
                 New Project
-              </Button>
+              </SubmitButton>
             </form>
             <form action={logout}>
-              <Button
-                type="submit"
+              <SubmitButton
                 variant="outline"
                 className="border-slate-700 text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700"
               >
                 ออกจากระบบ
-              </Button>
+              </SubmitButton>
             </form>
           </div>
         </div>

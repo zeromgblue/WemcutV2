@@ -6,7 +6,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+  // Only routes that read or change the session. The landing page and static
+  // assets skip the proxy entirely, so they are served straight from cache.
+  matcher: ["/login", "/auth/:path*", "/dashboard/:path*", "/editor/:path*"],
 };

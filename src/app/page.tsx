@@ -1,30 +1,15 @@
 import Link from "next/link";
-import { IBM_Plex_Mono, IBM_Plex_Sans_Thai, Space_Grotesk } from "next/font/google";
-import { ArrowRight, Captions, Scissors, Sparkles } from "lucide-react";
+import { ArrowRight, Captions, Check, Scissors, Sparkles, X } from "lucide-react";
 import { CursorGlow } from "./_components/cursor-glow";
+import { LinkLabel } from "./_components/link-label";
+import { landingFonts } from "./fonts";
 import "./landing.css";
-
-const grotesk = Space_Grotesk({
-  variable: "--font-grotesk",
-  subsets: ["latin"],
-});
-
-const plexThai = IBM_Plex_Sans_Thai({
-  variable: "--font-plex-thai",
-  subsets: ["latin", "thai"],
-  weight: ["400", "500", "600", "700"],
-});
-
-const plexMono = IBM_Plex_Mono({
-  variable: "--font-plex-mono",
-  subsets: ["latin"],
-  weight: ["400", "500"],
-});
 
 // ─── Data ────────────────────────────────────────────────
 const NAV = [
   { href: "#features", label: "ฟีเจอร์" },
   { href: "#how-it-works", label: "วิธีใช้งาน" },
+  { href: "#pricing", label: "ราคา" },
 ];
 
 const TRUST = ["ไม่ต้องตัดวิดีโอเอง", "ไม่ต้องพิมพ์ซับไตเติ้ลเอง", "เข้าสู่ระบบด้วย Google"];
@@ -53,6 +38,50 @@ const STEPS = [
   { title: "รับคลิปพร้อมแชร์", desc: "ดาวน์โหลดผลลัพธ์ที่ได้ แล้วนำไปใช้งานในทุกแพลตฟอร์มได้เลยทันที" },
 ];
 
+const PLANS = [
+  {
+    name: "Free",
+    price: "0",
+    cycle: "ตลอดชีพ",
+    credits: "100 เครดิต / เดือน",
+    featured: false,
+    cta: "เริ่มต้นฟรี",
+    items: [
+      { ok: true, t: "100 เครดิต / เดือน" },
+      { ok: true, t: "AI Subtitle" },
+      { ok: true, t: "Basic AI Edit" },
+      { ok: false, t: "AI Director (Full)" },
+      { ok: false, t: "Highlight Detection" },
+      { ok: false, t: "AI Voice & Sound" },
+    ],
+  },
+  {
+    name: "Pro",
+    price: "500",
+    cycle: "/ เดือน",
+    credits: "1,000 เครดิต / เดือน",
+    featured: true,
+    cta: "ทดลองฟรี 7 วัน",
+    items: [
+      { ok: true, t: "1,000 เครดิต / เดือน" },
+      { ok: true, t: "AI Director (Full)" },
+      { ok: true, t: "AI Subtitle + Highlight" },
+      { ok: true, t: "Remove Silence" },
+      { ok: true, t: "AI Voice & Sound Effect" },
+      { ok: true, t: "TikTok / Reels / Shorts Mode" },
+      { ok: true, t: "Export Full HD ไม่มี Watermark" },
+    ],
+  },
+];
+
+const CREDIT_TABLE = [
+  { action: "สร้าง Project", cost: 5 },
+  { action: "AI Subtitle", cost: 10 },
+  { action: "Remove Silence", cost: 10 },
+  { action: "Highlight Detection", cost: 20 },
+  { action: "Full AI Edit", cost: 50 },
+];
+
 const pad = (n: number) => String(n).padStart(2, "0");
 
 // ─── Building blocks ───────────────────────────────────────
@@ -72,7 +101,7 @@ function SectionHeading({ eyebrow, lead, rest }: { eyebrow: string; lead: string
 // ─── Page ─────────────────────────────────────────────────
 export default function LandingPage() {
   return (
-    <div className={`lp relative min-h-screen overflow-x-hidden ${grotesk.variable} ${plexThai.variable} ${plexMono.variable}`}>
+    <div className={`lp relative min-h-screen overflow-x-hidden ${landingFonts}`}>
       {/* ══ INTRO ══ */}
       <div className="lp-intro lp-grid" aria-hidden>
         <span className="lp-brand lp-intro-logo">WemCut</span>
@@ -103,8 +132,8 @@ export default function LandingPage() {
             ))}
           </nav>
 
-          <Link href="/login" className="lp-btn-ghost col-start-3 justify-self-end rounded-lg px-4 py-2 text-sm font-semibold">
-            เข้าสู่ระบบ
+          <Link href="/login" className="lp-btn-ghost relative col-start-3 justify-self-end rounded-lg px-4 py-2 text-sm font-semibold">
+            <LinkLabel>เข้าสู่ระบบ</LinkLabel>
           </Link>
         </div>
       </header>
@@ -153,10 +182,12 @@ export default function LandingPage() {
 
           <Link
             href="/login"
-            className="lp-enter lp-btn-solid mt-10 inline-flex items-center gap-2.5 rounded-xl px-7 py-3.5 text-sm font-bold"
+            className="lp-enter lp-btn-solid relative mt-10 inline-flex items-center gap-2.5 rounded-xl px-7 py-3.5 text-sm font-bold"
             style={{ "--d": "0.24s" } as React.CSSProperties}
           >
-            เริ่มต้นใช้งาน <ArrowRight className="h-4 w-4" />
+            <LinkLabel>
+              เริ่มต้นใช้งาน <ArrowRight className="h-4 w-4" />
+            </LinkLabel>
           </Link>
 
           <ul
@@ -234,6 +265,119 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ══ PRICING ══ */}
+      <section
+        id="pricing"
+        className="relative scroll-mt-[68px] py-24 lg:py-28"
+        style={{ borderTop: "1px solid var(--lp-line)" }}
+      >
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <SectionHeading eyebrow="แพ็กเกจและราคา" lead="เริ่มต้นฟรี" rest="จ่ายเท่าที่ใช้จริง" />
+            <p className="max-w-[20rem] text-sm leading-relaxed lg:pb-2" style={{ color: "var(--lp-text-3)" }}>
+              คิดตามการใช้งานด้วยระบบเครดิต ไม่มีค่าใช้จ่ายแอบแฝง ยกเลิกได้ทุกเมื่อ
+            </p>
+          </div>
+
+          <div
+            className="mt-14 grid lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.08]"
+            style={{ border: "1px solid var(--lp-line)" }}
+          >
+            {PLANS.map((plan, i) => (
+              <div key={plan.name} className="lp-cell flex flex-col p-10">
+                <div className="relative flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <h3 className="lp-brand text-xl">{plan.name}</h3>
+                    {plan.featured && (
+                      <span
+                        className="rounded-full px-2.5 py-0.5 text-[10px] font-semibold"
+                        style={{
+                          color: "var(--lp-red)",
+                          border: "1px solid rgba(229,72,59,0.4)",
+                          background: "rgba(229,72,59,0.1)",
+                        }}
+                      >
+                        แนะนำ
+                      </span>
+                    )}
+                  </div>
+                  <span className="lp-mono text-[10px]" style={{ color: "var(--lp-text-3)" }}>
+                    {pad(i + 1)}
+                  </span>
+                </div>
+
+                <div className="relative mt-7 flex items-baseline gap-1.5">
+                  <span className="text-lg" style={{ color: "var(--lp-text-2)" }}>
+                    ฿
+                  </span>
+                  <span className="lp-brand text-5xl">{plan.price}</span>
+                  <span className="ml-1 text-sm" style={{ color: "var(--lp-text-3)" }}>
+                    {plan.cycle}
+                  </span>
+                </div>
+                <p className="lp-mono relative mt-3 text-[11px] tracking-[0.12em]" style={{ color: "var(--lp-text-3)" }}>
+                  {plan.credits}
+                </p>
+
+                <ul className="relative mt-8 mb-10 space-y-3">
+                  {plan.items.map((it) => (
+                    <li key={it.t} className="flex items-start gap-3 text-sm">
+                      {it.ok ? (
+                        <Check className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--lp-red)" }} />
+                      ) : (
+                        <X className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "rgba(255,255,255,0.18)" }} />
+                      )}
+                      <span
+                        className={it.ok ? "" : "line-through"}
+                        style={{ color: it.ok ? "rgba(255,255,255,0.62)" : "rgba(255,255,255,0.22)" }}
+                      >
+                        {it.t}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                <Link
+                  href="/login"
+                  className={`${plan.featured ? "lp-btn-solid" : "lp-btn-ghost"} relative mt-auto inline-flex items-center justify-center gap-2.5 rounded-xl px-7 py-3.5 text-sm font-bold`}
+                >
+                  <LinkLabel>
+                    {plan.cta} <ArrowRight className="h-4 w-4" />
+                  </LinkLabel>
+                </Link>
+              </div>
+            ))}
+
+            <div className="lp-cell flex flex-col p-10">
+              <div className="relative flex items-start justify-between">
+                <h3 className="text-xl font-bold">เครดิตต่อการใช้งาน</h3>
+                <span className="lp-mono text-[10px]" style={{ color: "var(--lp-text-3)" }}>
+                  {pad(PLANS.length + 1)}
+                </span>
+              </div>
+              <p className="relative mt-3 text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.42)" }}>
+                แต่ละคำสั่งใช้เครดิตไม่เท่ากัน รู้ล่วงหน้าทุกครั้งก่อนกดใช้
+              </p>
+
+              <ul className="relative mt-8" style={{ borderTop: "1px solid var(--lp-line)" }}>
+                {CREDIT_TABLE.map((row) => (
+                  <li
+                    key={row.action}
+                    className="flex items-center justify-between py-3.5 text-sm"
+                    style={{ borderBottom: "1px solid var(--lp-line)" }}
+                  >
+                    <span style={{ color: "rgba(255,255,255,0.62)" }}>{row.action}</span>
+                    <span className="lp-mono text-xs" style={{ color: "var(--lp-text-2)" }}>
+                      <span className="text-white">{row.cost}</span> เครดิต
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ══ CTA ══ */}
       <section
         className="relative py-24"
@@ -256,9 +400,11 @@ export default function LandingPage() {
           </div>
           <Link
             href="/login"
-            className="lp-btn-ghost inline-flex shrink-0 items-center gap-2.5 self-start rounded-xl px-7 py-4 text-sm font-bold md:self-auto"
+            className="lp-btn-ghost relative inline-flex shrink-0 items-center gap-2.5 self-start rounded-xl px-7 py-4 text-sm font-bold md:self-auto"
           >
-            เริ่มต้นใช้งาน <ArrowRight className="h-4 w-4" />
+            <LinkLabel>
+              เริ่มต้นใช้งาน <ArrowRight className="h-4 w-4" />
+            </LinkLabel>
           </Link>
         </div>
       </section>

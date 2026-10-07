@@ -8,16 +8,20 @@ const kanit = Kanit({
   weight: ["300", "400", "500", "600", "700"],
 });
 
+// Prompt and Sarabun are only used for subtitle styling in the editor, so they
+// load on demand instead of being preloaded on every page.
 const prompt = Prompt({
   variable: "--font-prompt",
   subsets: ["latin", "thai"],
   weight: ["400", "500", "600", "700"],
+  preload: false,
 });
 
 const sarabun = Sarabun({
   variable: "--font-sarabun",
   subsets: ["latin", "thai"],
   weight: ["400", "500", "600", "700"],
+  preload: false,
 });
 
 export const metadata: Metadata = {
