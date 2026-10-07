@@ -3,9 +3,10 @@ name: Supabase keep-alive
 # Supabase pauses free-tier projects after about a week without activity.
 # This runs a tiny database query twice a week so the project stays awake.
 #
-# Requires two repository secrets (Settings > Secrets and variables > Actions):
+# Requires two values under Settings > Secrets and variables > Actions:
 #   SUPABASE_URL       - same value as NEXT_PUBLIC_SUPABASE_URL
-#   SUPABASE_ANON_KEY  - same value as NEXT_PUBLIC_SUPABASE_ANON_KEY
+#                        (the URL isn't sensitive, so a secret or a variable works)
+#   SUPABASE_ANON_KEY  - secret, same value as NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 on:
   schedule:
@@ -19,7 +20,7 @@ jobs:
     steps:
       - name: Query the database
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
