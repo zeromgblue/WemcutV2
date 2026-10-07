@@ -83,7 +83,7 @@ function ClipWaveform({ peaks, start, end, duration }: { peaks: number[]; start:
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
     >
-      <polygon points={points} fill="currentColor" className="text-amber-200" />
+      <polygon points={points} fill="currentColor" className="text-brand-200" />
     </svg>
   );
 }
@@ -277,7 +277,7 @@ export function TimelinePanel({
           </Button>
           <Button
             size="icon"
-            className="bg-amber-500 text-black hover:bg-amber-400"
+            className="bg-brand-500 text-white hover:bg-brand-400"
             onClick={onTogglePlay}
             disabled={clips.length === 0}
           >
@@ -356,14 +356,14 @@ export function TimelinePanel({
                         }}
                         className={`absolute top-0.5 bottom-0.5 rounded overflow-hidden text-xs transition-colors cursor-grab active:cursor-grabbing group ${
                           selectedClipId === clip.id
-                            ? "border-2 border-amber-400"
-                            : "border border-amber-500/30 hover:border-amber-500/60"
-                        } ${isDragOver ? "ring-2 ring-amber-300" : ""} ${
+                            ? "border-2 border-brand-400"
+                            : "border border-brand-500/30 hover:border-brand-500/60"
+                        } ${isDragOver ? "ring-2 ring-brand-300" : ""} ${
                           draggingClipId === clip.id ? "opacity-40" : ""
                         }`}
                         style={{ left, width }}
                       >
-                        <div className="absolute inset-0 bg-amber-950" />
+                        <div className="absolute inset-0 bg-brand-950" />
                         <ClipThumbnails
                           thumbnails={assetThumbnails[clip.assetId] ?? []}
                           start={clip.start}
@@ -383,13 +383,13 @@ export function TimelinePanel({
                           draggable={false}
                           onDragStart={(e) => e.preventDefault()}
                           onMouseDown={(e) => handleTrimStart(e, clip, "start")}
-                          className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-amber-300/40 z-10"
+                          className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-brand-300/40 z-10"
                         />
                         <span
                           draggable={false}
                           onDragStart={(e) => e.preventDefault()}
                           onMouseDown={(e) => handleTrimStart(e, clip, "end")}
-                          className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-amber-300/40 z-10"
+                          className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-brand-300/40 z-10"
                         />
                       </div>
                     );
@@ -420,10 +420,10 @@ export function TimelinePanel({
             </div>
 
             <div
-              className="absolute top-6 bottom-0 w-px bg-amber-400 z-20 pointer-events-none"
+              className="absolute top-6 bottom-0 w-px bg-brand-400 z-20 pointer-events-none"
               style={{ left: playhead * PIXELS_PER_SECOND }}
             >
-              <div className="w-2.5 h-2.5 bg-amber-400 rotate-45 -translate-x-1/2 translate-y-0.5 rounded-[2px]" />
+              <div className="w-2.5 h-2.5 bg-brand-400 rotate-45 -translate-x-1/2 translate-y-0.5 rounded-[2px]" />
             </div>
           </div>
         ) : (

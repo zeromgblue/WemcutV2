@@ -1,7 +1,14 @@
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import type { TimelineClip } from "@/app/actions/timeline";
 import type { SubtitleSegment } from "@/app/actions/subtitles";
-import { SUBTITLE_FONT_OPTIONS, hexToRgba, type SubtitleStyle } from "@/lib/subtitle-style";
+import {
+  SUBTITLE_REFERENCE_HEIGHT,
+  hexToRgba,
+  subtitleAnimationState,
+  type SubtitleStyle,
+} from "@/lib/subtitle-style";
+import { subtitleFontFamily } from "@/lib/subtitle-fonts";
+import { DEFAULT_CLIP_TRANSFORM, transformedRect } from "@/lib/clip-transform";
 import { loadAudioBuffer } from "@/lib/audio-loader";
 
 export type ExportAsset = { id: string; videoUrl: string };
@@ -53,46 +60,79 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return lines;
 }
 
+// Mirrors the preview's CSS (subtitleTextStyle + the sub-enter keyframes) so
+// the exported file looks like what the editor shows.
 function drawSubtitle(
   ctx: CanvasRenderingContext2D,
   text: string,
   style: SubtitleStyle,
   fontFamily: string,
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
+  elapsedSeconds: number
 ) {
-  const scale = canvasHeight / 720;
+  const scale = canvasHeight / SUBTITLE_REFERENCE_HEIGHT;
   const fontSize = style.fontSize * scale;
+  const state = subtitleAnimationState(style.animation, elapsedSeconds);
+  if (state.opacity <= 0) return;
+
+  ctx.save();
   ctx.font = `${style.bold ? "700" : "400"} ${fontSize}px ${fontFamily}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  const maxWidth = canvasWidth * 0.85;
-  const lines = wrapText(ctx, text, maxWidth);
-  const lineHeight = fontSize * 1.35;
   const paddingX = fontSize * 0.5;
   const paddingY = fontSize * 0.3;
-
-  const centerX = (style.x / 100) * canvasWidth;
-  const centerY = (style.y / 100) * canvasHeight;
+  const lines = wrapText(ctx, text, canvasWidth * 0.9 - paddingX * 2);
+  const lineHeight = fontSize * 1.35;
   const blockHeight = lines.length * lineHeight;
   const widestLine = Math.max(...lines.map((l) => ctx.measureText(l).width));
-
-  ctx.fillStyle = hexToRgba(style.backgroundColor, style.backgroundOpacity);
-  const boxX = centerX - widestLine / 2 - paddingX;
-  const boxY = centerY - blockHeight / 2 - paddingY;
   const boxW = widestLine + paddingX * 2;
   const boxH = blockHeight + paddingY * 2;
-  const radius = Math.min(8 * scale, boxH / 2);
-  ctx.beginPath();
-  ctx.roundRect(boxX, boxY, boxW, boxH, radius);
-  ctx.fill();
 
-  ctx.fillStyle = style.color;
+  ctx.translate(
+    (style.x / 100) * canvasWidth + state.x * fontSize,
+    (style.y / 100) * canvasHeight + state.y * fontSize
+  );
+  ctx.rotate((state.rotate * Math.PI) / 180);
+  ctx.scale(state.scale, state.scale);
+  ctx.globalAlpha = state.opacity;
+  if (state.blur > 0) ctx.filter = `blur(${state.blur * fontSize}px)`;
+  if (state.clip > 0) {
+    ctx.beginPath();
+    ctx.rect(-boxW / 2 - boxW * 0.2, -boxH / 2 - boxH * 0.2, boxW * 1.2 - boxW * state.clip, boxH * 1.4);
+    ctx.clip();
+  }
+
+  if (style.backgroundOpacity > 0) {
+    ctx.fillStyle = hexToRgba(style.backgroundColor, style.backgroundOpacity);
+    ctx.beginPath();
+    ctx.roundRect(-boxW / 2, -boxH / 2, boxW, boxH, Math.min(style.boxRadius * scale, boxH / 2));
+    ctx.fill();
+  }
+
+  const outline = style.outlineWidth * scale;
   lines.forEach((line, i) => {
-    const y = centerY - blockHeight / 2 + lineHeight * (i + 0.5);
-    ctx.fillText(line, centerX, y);
+    const y = -blockHeight / 2 + lineHeight * (i + 0.5);
+    if (style.shadow) {
+      ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
+      ctx.shadowBlur = fontSize * 0.25;
+      ctx.shadowOffsetY = fontSize * 0.08;
+    }
+    if (outline > 0) {
+      ctx.lineJoin = "round";
+      ctx.lineWidth = outline * 2;
+      ctx.strokeStyle = style.outlineColor;
+      ctx.strokeText(line, 0, y);
+      // The shadow belongs to the outlined shape; don't cast it twice.
+      ctx.shadowColor = "transparent";
+    }
+    ctx.fillStyle = style.color;
+    ctx.fillText(line, 0, y);
+    ctx.shadowColor = "transparent";
   });
+
+  ctx.restore();
 }
 
 /** Loads a video via a same-origin blob: URL — drawing a cross-origin <video>
@@ -127,9 +167,12 @@ export async function exportVideo({
   if (!firstAsset) throw new Error("ไม่พบไฟล์วิดีโอต้นทาง");
 
   await document.fonts.ready;
-  const fontFamily = resolveFontFamily(
-    SUBTITLE_FONT_OPTIONS.find((f) => f.value === subtitleStyle.fontFamily)?.cssVar ?? "sans-serif"
-  );
+  const fontFamily = resolveFontFamily(subtitleFontFamily(subtitleStyle.fontFamily));
+  // Canvas text silently falls back to a default font if this one hasn't been
+  // downloaded yet, so load it explicitly before drawing anything.
+  await document.fonts
+    .load(`${subtitleStyle.bold ? "700" : "400"} 32px ${fontFamily}`, "สวัสดี Aa")
+    .catch(() => undefined);
 
   const video = document.createElement("video") as VideoWithFrameCallback;
   video.muted = true;
@@ -280,11 +323,22 @@ export async function exportVideo({
           return;
         }
 
-        ctx!.drawImage(video, 0, 0, width, height);
+        const rect = transformedRect(
+          clip.transform ?? DEFAULT_CLIP_TRANSFORM,
+          video.videoWidth,
+          video.videoHeight,
+          width,
+          height
+        );
+        ctx!.fillStyle = "#000";
+        ctx!.fillRect(0, 0, width, height);
+        ctx!.drawImage(video, rect.x, rect.y, rect.width, rect.height);
         const active = subtitles.find(
           (s) => s.assetId === clip.assetId && metadata.mediaTime >= s.start && metadata.mediaTime <= s.end
         );
-        if (active) drawSubtitle(ctx!, active.text, subtitleStyle, fontFamily, width, height);
+        if (active) {
+          drawSubtitle(ctx!, active.text, subtitleStyle, fontFamily, width, height, metadata.mediaTime - active.start);
+        }
 
         const outputSeconds = outputStartSeconds + (metadata.mediaTime - clip.start);
         const frame = new VideoFrame(canvas, {

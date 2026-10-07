@@ -4,12 +4,15 @@ import { revalidatePath } from "next/cache";
 import { assertProjectOwner } from "@/lib/supabase/authz";
 import type { SubtitleSegment } from "./subtitles";
 import { DEFAULT_SUBTITLE_STYLE, type SubtitleStyle } from "@/lib/subtitle-style";
+import type { ClipTransform } from "@/lib/clip-transform";
 
 export type TimelineClip = {
   id: string;
   assetId: string;
   start: number;
   end: number;
+  /** Zoom and position in the frame; absent means fitted and centred. */
+  transform?: ClipTransform;
 };
 
 export async function saveTimeline(

@@ -6,6 +6,10 @@ import { transcribeAsset, type SubtitleSegment } from "@/app/actions/subtitles";
 import { createUploadUrl, confirmAssetUpload, getAssetPlaybackUrl } from "@/app/actions/assets";
 import { probeDuration } from "@/lib/probe-duration";
 import { loadAudioBuffer, MAX_ANALYZABLE_DURATION_SECONDS } from "@/lib/audio-loader";
+import { refineSubtitleTiming } from "@/lib/refine-subtitle-timing";
+import { DEFAULT_CLIP_TRANSFORM, clampScale, coverScale, type ClipTransform } from "@/lib/clip-transform";
+import { SUBTITLE_PRESETS } from "@/lib/subtitle-style";
+import type { DirectorAction } from "@/lib/director";
 import { detectSilentRanges } from "@/lib/silence-detection";
 import { removeSilentRangesFromClips } from "@/lib/apply-silence-to-clips";
 import { generateThumbnails, type Thumbnail } from "@/lib/generate-thumbnails";
@@ -85,6 +89,7 @@ export function EditorWorkspace({
   const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>(initialSubtitleStyle ?? DEFAULT_SUBTITLE_STYLE);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [assetDimensions, setAssetDimensions] = useState<Record<string, { width: number; height: number }>>({});
   const [assetThumbnails, setAssetThumbnails] = useState<Record<string, Thumbnail[]>>({});
   const [assetPeaks, setAssetPeaks] = useState<Record<string, number[]>>({});
   const [exporting, setExporting] = useState(false);
@@ -179,6 +184,15 @@ export function EditorWorkspace({
   );
 
   const totalDuration = clips.reduce((sum, c) => sum + (c.end - c.start), 0);
+
+  // The clip under the playhead is the one the preview shows and edits. At the
+  // very end of the timeline the playhead sits past the last clip, so fall back to it.
+  const currentClip = locate(clips, playhead)?.clip ?? clips[clips.length - 1] ?? null;
+  const currentTransform = currentClip ? (currentClip.transform ?? DEFAULT_CLIP_TRANSFORM) : null;
+
+  // The output frame takes the shape of the first clip's video, as the export does.
+  const frameSource = assetDimensions[clips[0]?.assetId ?? ""] ?? (activeAssetId ? assetDimensions[activeAssetId] : undefined);
+  const frameAspect = frameSource ? frameSource.width / frameSource.height : 16 / 9;
 
   const pendingSourceSeek = useRef<{ sourceTime: number; shouldPlay: boolean } | null>(null);
 
@@ -327,6 +341,57 @@ export function EditorWorkspace({
     [clips, assetsById]
   );
 
+  // Like trimming, dragging or zooming the video updates `clips` on every
+  // pointer move; beginTrim/endTrim bracket the gesture into one undo step.
+  const setCurrentTransform = useCallback(
+    (transform: ClipTransform) => {
+      if (!currentClip) return;
+      setClips(clips.map((c) => (c.id === currentClip.id ? { ...c, transform } : c)));
+      setDirty(true);
+    },
+    [clips, currentClip]
+  );
+
+  const deleteCurrentClip = useCallback(() => {
+    if (!currentClip || clips.length <= 1) return;
+    const next = clips.filter((c) => c.id !== currentClip.id);
+    const newTotal = next.reduce((sum, c) => sum + (c.end - c.start), 0);
+    commitClips(next);
+    setSelectedClipId(null);
+    setPlayhead((p) => Math.min(p, newTotal));
+  }, [currentClip, clips, commitClips]);
+
+  // Cuts a span of timeline time out, trimming or splitting whichever clips it overlaps.
+  const deleteRange = useCallback(
+    (rangeStart: number, rangeEnd: number) => {
+      const next: TimelineClip[] = [];
+      let cursor = 0;
+      for (const clip of clips) {
+        const length = clip.end - clip.start;
+        const cutFrom = Math.max(rangeStart - cursor, 0);
+        const cutTo = Math.min(rangeEnd - cursor, length);
+        if (cutTo <= cutFrom) {
+          next.push(clip);
+        } else {
+          if (cutFrom >= MIN_CLIP_DURATION) next.push({ ...clip, end: clip.start + cutFrom });
+          if (length - cutTo >= MIN_CLIP_DURATION) {
+            next.push({ ...clip, id: crypto.randomUUID(), start: clip.start + cutTo });
+          }
+        }
+        cursor += length;
+      }
+      const unchanged = next.length === clips.length && next.every((c, i) => c === clips[i]);
+      // Nothing overlapped the range, or the cut would leave the timeline empty.
+      if (unchanged || next.length === 0) return;
+      commitClips(next);
+      setSelectedClipId(null);
+      // A playhead inside the cut lands on its start; one after it moves left with the footage.
+      const removed = Math.min(rangeEnd, cursor) - rangeStart;
+      setPlayhead((p) => (p <= rangeStart ? p : Math.max(rangeStart, p - removed)));
+    },
+    [clips, commitClips]
+  );
+
   const beginTrim = useCallback(() => {
     trimHistoryBase.current = clips;
   }, [clips]);
@@ -383,7 +448,18 @@ export function EditorWorkspace({
     setSubtitleError(null);
     setGeneratingSubtitles(true);
     try {
-      const results = await Promise.all(assetIds.map((id) => transcribeAsset(projectId, id)));
+      const results = await Promise.all(
+        assetIds.map(async (id) => {
+          // Decode the audio while the transcript is being made, then snap each
+          // line to where speech really starts and stops. If the audio can't be
+          // analysed, the transcript's own timing is still good enough to use.
+          const url = assetsById[id]?.videoUrl;
+          const audio = url ? loadAudioBuffer(url).catch(() => null) : Promise.resolve(null);
+          const segments = await transcribeAsset(projectId, id);
+          const buffer = await audio;
+          return buffer ? refineSubtitleTiming(segments, buffer) : segments;
+        })
+      );
       const flat = results.flat();
       if (flat.length === 0) {
         setSubtitleError("ไม่พบคำพูดในวิดีโอ จึงไม่มีการเปลี่ยนแปลง");
@@ -396,7 +472,7 @@ export function EditorWorkspace({
     } finally {
       setGeneratingSubtitles(false);
     }
-  }, [projectId, clips]);
+  }, [projectId, clips, assetsById]);
 
   const addVideo = useCallback(
     async (file: File) => {
@@ -474,7 +550,7 @@ export function EditorWorkspace({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${projectName || "wemcut"}.webm`;
+      a.download = `${projectName || "wemcut"}.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -485,6 +561,70 @@ export function EditorWorkspace({
       setExporting(false);
     }
   }, [clips, assetsById, subtitles, subtitleStyle, projectName]);
+
+  // Runs one command from the AI chat. The chat runs several in a row, so it
+  // calls through a ref and always gets the handlers from the latest render.
+  const runDirectorAction = async (action: DirectorAction) => {
+    const video = videoRef.current;
+    switch (action.tool) {
+      case "remove_silence":
+        return removeSilence();
+      case "split_at_playhead":
+        return splitAtPlayhead();
+      case "delete_current_clip":
+        return deleteCurrentClip();
+      case "delete_range":
+        return deleteRange(action.start, action.end);
+      case "seek":
+        return seek(action.seconds);
+      case "play":
+        if (video?.paused) togglePlay();
+        return;
+      case "pause":
+        if (video && !video.paused) togglePlay();
+        return;
+      case "undo":
+        return undo();
+      case "redo":
+        return redo();
+      case "generate_subtitles":
+        return generateSubtitles();
+      case "clear_subtitles":
+        setSubtitles([]);
+        setCurrentSubtitleText(null);
+        setDirty(true);
+        return;
+      case "apply_subtitle_preset": {
+        const preset = SUBTITLE_PRESETS.find((p) => p.id === action.preset);
+        if (preset) handleSubtitleStyleChange({ ...subtitleStyle, ...preset.style });
+        return;
+      }
+      case "set_subtitle_style":
+        return handleSubtitleStyleChange({ ...subtitleStyle, ...action.style });
+      case "set_video_transform": {
+        if (!currentClip || !currentTransform) return;
+        let next: ClipTransform = { ...currentTransform };
+        if (action.mode === "fit") next = { ...DEFAULT_CLIP_TRANSFORM };
+        if (action.mode === "fill") {
+          const size = assetDimensions[currentClip.assetId];
+          next = { x: 0, y: 0, scale: size ? coverScale(size.width, size.height, frameAspect, 1) : 1 };
+        }
+        if (action.scale !== undefined) next.scale = clampScale(action.scale);
+        if (action.x !== undefined) next.x = action.x;
+        if (action.y !== undefined) next.y = action.y;
+        return commitClips(clips.map((c) => (c.id === currentClip.id ? { ...c, transform: next } : c)));
+      }
+      case "save_project":
+        return handleSave();
+      case "export_video":
+        return handleExport();
+    }
+  };
+  const directorActionRef = useRef(runDirectorAction);
+  useEffect(() => {
+    directorActionRef.current = runDirectorAction;
+  });
+  const handleDirectorAction = useCallback((action: DirectorAction) => directorActionRef.current(action), []);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -557,6 +697,17 @@ export function EditorWorkspace({
           videoUrl={activeVideoUrl}
           projectId={projectId}
           videoRef={videoRef}
+          frameAspect={frameAspect}
+          transform={currentTransform}
+          onTransformStart={beginTrim}
+          onTransformChange={setCurrentTransform}
+          onTransformEnd={endTrim}
+          onVideoDimensions={(width, height) => {
+            if (activeAssetId && width && height) {
+              setAssetDimensions((prev) => ({ ...prev, [activeAssetId]: { width, height } }));
+            }
+          }}
+          onVideoUploaded={(asset) => setAssets((prev) => [...prev, asset])}
           subtitleText={currentSubtitleText}
           subtitleKey={currentSubtitleKey}
           subtitleStyle={subtitleStyle}
@@ -570,12 +721,16 @@ export function EditorWorkspace({
         />
         <AIChatPanel
           projectId={projectId}
-          clipCount={clips.length}
-          totalDuration={totalDuration}
-          playhead={playhead}
-          onRemoveSilence={removeSilence}
-          onSplitAtPlayhead={splitAtPlayhead}
-          onSeek={seek}
+          context={{
+            clipCount: clips.length,
+            totalDuration,
+            playhead,
+            isPlaying,
+            subtitleCount: subtitles.length,
+            subtitleStyle,
+            videoTransform: currentTransform,
+          }}
+          onAction={handleDirectorAction}
         />
       </main>
 

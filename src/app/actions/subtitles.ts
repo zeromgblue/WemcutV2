@@ -1,54 +1,130 @@
 "use server";
 
+import Anthropic from "@anthropic-ai/sdk";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { assertProjectOwner } from "@/lib/supabase/authz";
 import { r2Client, R2_BUCKET_NAME } from "@/lib/r2/client";
+import { buildSubtitleLines, isSafeCorrection, type TimedLine, type TimedToken } from "@/lib/subtitle-lines";
 
 const GROQ_TRANSCRIPTION_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
 const MODEL = "whisper-large-v3";
 const MAX_TRANSCRIBABLE_FILE_SIZE = 25 * 1024 * 1024;
 
-// A new subtitle line starts on a long pause (likely silence) or once the
-// current line has accumulated enough text/time — keeps lines short and
-// stops them from spanning gaps where nothing is actually being said.
-const MAX_GAP_SECONDS = 0.7;
-const MAX_CHUNK_CHARS = 42;
-const MAX_CHUNK_DURATION_SECONDS = 6;
+// Whisper continues from this as if it were the preceding transcript, which
+// keeps it in Thai script with normal Thai spacing.
+const TRANSCRIPTION_PROMPT = "ต่อไปนี้เป็นบทพูดภาษาไทย";
+
+// Whisper invents text over silence and music. A segment is treated as invented
+// when the model itself was unsure there was speech, or when it loops.
+const NO_SPEECH_PROB_LIMIT = 0.6;
+const LOW_CONFIDENCE_LOGPROB = -0.8;
+const REPETITION_COMPRESSION_RATIO = 2.6;
+// Stock phrases Whisper is known to produce for Thai audio with no speech.
+const STOCK_HALLUCINATIONS = ["ขอบคุณที่รับชม", "โปรดติดตามตอนต่อไป", "ขอบคุณสำหรับการรับชม"];
+
+const CORRECTION_MODEL = "claude-sonnet-5-5";
+const CORRECTION_BATCH_SIZE = 150;
 
 export type SubtitleSegment = { assetId: string; start: number; end: number; text: string };
 
-type GroqWord = { word: string; start: number; end: number };
-type GroqVerboseJson = {
-  segments?: { start: number; end: number; text: string }[];
-  words?: GroqWord[];
+type GroqSegment = {
+  start: number;
+  end: number;
+  text: string;
+  avg_logprob?: number;
+  compression_ratio?: number;
+  no_speech_prob?: number;
+};
+type GroqVerboseJson = { segments?: GroqSegment[]; words?: TimedToken[] };
+
+function isHallucinated(segment: GroqSegment) {
+  const noSpeech = segment.no_speech_prob ?? 0;
+  const logprob = segment.avg_logprob ?? 0;
+  if (noSpeech > NO_SPEECH_PROB_LIMIT && logprob < LOW_CONFIDENCE_LOGPROB) return true;
+  if ((segment.compression_ratio ?? 0) > REPETITION_COMPRESSION_RATIO) return true;
+  const text = segment.text.trim();
+  if (text === TRANSCRIPTION_PROMPT) return true;
+  return noSpeech > 0.4 && STOCK_HALLUCINATIONS.some((phrase) => text === phrase);
+}
+
+const CORRECTION_SYSTEM_PROMPT = `คุณคือผู้ตรวจทานซับไตเติลภาษาไทยที่ได้จากระบบถอดเสียงอัตโนมัติ
+
+ระบบถอดเสียงมักสะกดคำไทยผิด เลือกคำพ้องเสียงผิด หรือแบ่งคำผิด หน้าที่ของคุณคือแก้ให้เป็นคำที่ผู้พูดน่าจะพูดจริง โดยดูจากบริบทของบรรทัดรอบข้าง
+
+ซับไตเติลแต่ละบรรทัดผูกกับช่วงเวลาในวิดีโอ จึงต้องคงจำนวนบรรทัดและเนื้อหาของแต่ละบรรทัดไว้:
+- แก้เฉพาะการสะกด คำพ้องเสียง และการเว้นวรรค
+- ห้ามเพิ่ม ตัด เรียบเรียงใหม่ หรือย้ายคำข้ามบรรทัด
+- คงภาษาพูด คำแสลง คำลงท้าย (ครับ ค่ะ นะ) คำภาษาอังกฤษ ชื่อเฉพาะ และตัวเลขไว้ตามเดิม
+- ถ้าไม่แน่ใจว่าผิด ให้คงข้อความเดิม
+
+ตอบกลับทุกบรรทัดด้วยเลข i เดิม`;
+
+const CORRECTION_SCHEMA = {
+  type: "object",
+  properties: {
+    lines: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { i: { type: "integer" }, text: { type: "string" } },
+        required: ["i", "text"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["lines"],
+  additionalProperties: false,
 };
 
-function chunkWords(words: GroqWord[]): { start: number; end: number; text: string }[] {
-  const chunks: { start: number; end: number; text: string }[] = [];
-  let current: GroqWord[] = [];
+async function correctBatch(client: Anthropic, lines: TimedLine[]): Promise<TimedLine[]> {
+  const response = await client.beta.messages.create({
+    model: CORRECTION_MODEL,
+    max_tokens: 16000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    output_config: { effort: "low", format: { type: "json_schema", schema: CORRECTION_SCHEMA } },
+    system: CORRECTION_SYSTEM_PROMPT,
+    messages: [
+      { role: "user", content: JSON.stringify(lines.map((line, i) => ({ i, text: line.text }))) },
+    ],
+  });
 
-  function flush() {
-    if (current.length === 0) return;
-    const text = current.map((w) => w.word).join("").trim();
-    if (text) chunks.push({ start: current[0].start, end: current[current.length - 1].end, text });
-    current = [];
-  }
+  if (response.stop_reason !== "end_turn") return lines;
+  const text = response.content.find((block) => block.type === "text")?.text;
+  if (!text) return lines;
 
-  for (const word of words) {
-    const last = current[current.length - 1];
-    if (last) {
-      const gap = word.start - last.end;
-      const prospectiveChars = current.reduce((n, w) => n + w.word.length, 0) + word.word.length;
-      const prospectiveDuration = word.end - current[0].start;
-      if (gap > MAX_GAP_SECONDS || prospectiveChars > MAX_CHUNK_CHARS || prospectiveDuration > MAX_CHUNK_DURATION_SECONDS) {
-        flush();
-      }
+  const parsed = JSON.parse(text) as { lines: { i: number; text: string }[] };
+  const corrected = [...lines];
+  for (const item of parsed.lines) {
+    const original = lines[item.i];
+    const next = item.text.trim();
+    if (original && isSafeCorrection(original.text, next)) {
+      corrected[item.i] = { ...original, text: next };
     }
-    current.push(word);
   }
-  flush();
+  return corrected;
+}
 
-  return chunks;
+// Fixes Thai misspellings in the transcript. Timing is untouched, and any
+// failure falls back to the raw transcript rather than failing the whole job.
+async function correctSpelling(lines: TimedLine[]): Promise<TimedLine[]> {
+  if (!process.env.ANTHROPIC_API_KEY || lines.length === 0) return lines;
+
+  const client = new Anthropic({ timeout: 90_000, maxRetries: 1 });
+  const batches: TimedLine[][] = [];
+  for (let i = 0; i < lines.length; i += CORRECTION_BATCH_SIZE) {
+    batches.push(lines.slice(i, i + CORRECTION_BATCH_SIZE));
+  }
+
+  const results = await Promise.all(
+    batches.map((batch) =>
+      correctBatch(client, batch).catch((err) => {
+        console.error("Subtitle spelling correction failed", err);
+        return batch;
+      })
+    )
+  );
+  return results.flat();
 }
 
 export async function transcribeAsset(
@@ -88,8 +164,11 @@ export async function transcribeAsset(
   form.append("file", new Blob([Buffer.from(bytes)]), `audio.${extension}`);
   form.append("model", MODEL);
   form.append("language", "th");
+  form.append("temperature", "0");
+  form.append("prompt", TRANSCRIPTION_PROMPT);
   form.append("response_format", "verbose_json");
   form.append("timestamp_granularities[]", "word");
+  form.append("timestamp_granularities[]", "segment");
 
   const res = await fetch(GROQ_TRANSCRIPTION_URL, {
     method: "POST",
@@ -105,12 +184,23 @@ export async function transcribeAsset(
 
   const json = (await res.json()) as GroqVerboseJson;
 
-  const chunks =
-    json.words && json.words.length > 0
-      ? chunkWords(json.words)
-      : (json.segments ?? []).map((s) => ({ start: s.start, end: s.end, text: s.text }));
+  const segments = json.segments ?? [];
+  const invented = segments.filter(isHallucinated);
+  const spoken = segments.filter((s) => !isHallucinated(s));
 
-  return chunks
-    .map((c) => ({ assetId, start: c.start, end: c.end, text: c.text.trim() }))
-    .filter((c) => c.text.length > 0);
+  const lines: TimedLine[] =
+    json.words && json.words.length > 0
+      ? buildSubtitleLines(
+          json.words.filter((w) => {
+            const middle = (w.start + w.end) / 2;
+            return !invented.some((s) => middle >= s.start && middle <= s.end);
+          })
+        )
+      : spoken.map((s) => ({ start: s.start, end: s.end, text: s.text.trim() }));
+
+  const corrected = await correctSpelling(lines);
+
+  return corrected
+    .map((line) => ({ assetId, start: line.start, end: line.end, text: line.text.trim() }))
+    .filter((line) => line.text.length > 0);
 }

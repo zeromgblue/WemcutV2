@@ -1,15 +1,19 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { probeDuration } from "@/lib/probe-duration";
-import { createUploadUrl, confirmAssetUpload } from "@/app/actions/assets";
+import { createUploadUrl, confirmAssetUpload, getAssetPlaybackUrl } from "@/app/actions/assets";
 
-export function VideoUploader({ projectId }: { projectId: string }) {
-  const router = useRouter();
+export function VideoUploader({
+  projectId,
+  onUploaded,
+}: {
+  projectId: string;
+  onUploaded: (asset: { id: string; duration: number | null; videoUrl: string }) => void;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +48,7 @@ export function VideoUploader({ projectId }: { projectId: string }) {
         xhr.send(file);
       });
 
-      await confirmAssetUpload({
+      const { id } = await confirmAssetUpload({
         projectId,
         storageKey,
         type: file.type.startsWith("video/") ? "video" : file.type,
@@ -52,8 +56,11 @@ export function VideoUploader({ projectId }: { projectId: string }) {
         duration,
       });
 
+      // Hand the new asset straight to the editor. The editor keeps its asset
+      // list in state, so a router.refresh() alone would never show the video.
+      const videoUrl = await getAssetPlaybackUrl(projectId, id);
       setProgress(null);
-      router.refresh();
+      onUploaded({ id, duration: duration ?? null, videoUrl });
     } catch {
       setError("อัปโหลดไม่สำเร็จ ลองใหม่อีกครั้ง");
       setProgress(null);
@@ -75,7 +82,7 @@ export function VideoUploader({ projectId }: { projectId: string }) {
       }}
       className={cn(
         "w-full h-full flex flex-col items-center justify-center gap-4 text-center rounded-xl border-2 border-dashed transition-colors",
-        dragOver ? "border-amber-500 bg-amber-500/5" : "border-border"
+        dragOver ? "border-brand-500 bg-brand-500/5" : "border-border"
       )}
     >
       <input
@@ -93,7 +100,7 @@ export function VideoUploader({ projectId }: { projectId: string }) {
         <div className="w-48 space-y-2">
           <div className="h-1.5 rounded-full bg-muted overflow-hidden">
             <div
-              className="h-full bg-amber-500 transition-all"
+              className="h-full bg-brand-500 transition-all"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -103,13 +110,13 @@ export function VideoUploader({ projectId }: { projectId: string }) {
         </div>
       ) : (
         <>
-          <div className="size-12 rounded-full bg-amber-500/10 flex items-center justify-center">
-            <UploadCloud className="w-5 h-5 text-amber-400" />
+          <div className="size-12 rounded-full bg-brand-500/10 flex items-center justify-center">
+            <UploadCloud className="w-5 h-5 text-brand-400" />
           </div>
           <div className="space-y-2">
             <Button
               onClick={() => inputRef.current?.click()}
-              className="bg-amber-500 text-black hover:bg-amber-400"
+              className="bg-brand-500 text-white hover:bg-brand-400"
             >
               เลือกไฟล์วิดีโอ
             </Button>

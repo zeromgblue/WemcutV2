@@ -68,8 +68,8 @@ export function EditorHeader({
           <ArrowLeft className="w-4 h-4" />
         </Link>
         <div className="flex items-center gap-2 min-w-0">
-          <div className="size-6 rounded-md flex items-center justify-center bg-gradient-to-br from-amber-400 to-amber-700 shrink-0">
-            <Scissors className="w-3 h-3 text-black" />
+          <div className="size-6 rounded-md flex items-center justify-center bg-gradient-to-br from-brand-400 to-brand-700 shrink-0">
+            <Scissors className="w-3 h-3 text-white" />
           </div>
           {editing ? (
             <Input
@@ -102,7 +102,7 @@ export function EditorHeader({
             </>
           )}
           {dirty && !saving && (
-            <span className="size-1.5 rounded-full bg-amber-400 shrink-0" title="มีการเปลี่ยนแปลงที่ยังไม่บันทึก" />
+            <span className="size-1.5 rounded-full bg-brand-400 shrink-0" title="มีการเปลี่ยนแปลงที่ยังไม่บันทึก" />
           )}
           {renameError && <span className="text-xs text-destructive shrink-0">{renameError}</span>}
         </div>
@@ -119,7 +119,7 @@ export function EditorHeader({
           {saving ? "กำลังบันทึก..." : "บันทึก"}
         </Button>
         <Button
-          className="bg-amber-500 text-black hover:bg-amber-400 gap-1.5"
+          className="bg-brand-500 text-white hover:bg-brand-400 gap-1.5"
           onClick={onExport}
           disabled={exporting || !canExport}
         >
