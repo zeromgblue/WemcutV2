@@ -150,3 +150,6 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Credits (allowances, costs, spending rules, and RLS for the remaining tables)
+-- are added by supabase/migrations/001_credits.sql. Run it after this file.

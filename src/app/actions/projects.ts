@@ -5,12 +5,19 @@ import { revalidatePath } from "next/cache";
 import { getAuthUser } from "@/lib/supabase/server";
 import { assertProjectOwner } from "@/lib/supabase/authz";
 import { parseCanvasSize } from "@/lib/canvas-size";
+import { getCreditCosts, getCreditStatus, spendCredits } from "@/lib/credits";
 
 export async function createProject(formData: FormData) {
   const { supabase, user } = await getAuthUser();
 
   if (!user) {
     redirect("/login");
+  }
+
+  const [credits, costs] = await Promise.all([getCreditStatus(supabase), getCreditCosts(supabase)]);
+  const cost = costs.find((c) => c.action === "create_project")?.cost ?? 0;
+  if (credits && credits.remaining < cost) {
+    redirect("/dashboard?error=no-credits");
   }
 
   const name = String(formData.get("name") ?? "").trim().slice(0, 200) || "Untitled Project";
@@ -25,6 +32,8 @@ export async function createProject(formData: FormData) {
   if (error || !data) {
     redirect("/dashboard?error=create-project-failed");
   }
+
+  await spendCredits(supabase, "create_project");
 
   // The frame size lives in the project's first timeline version, alongside
   // everything else the editor saves. If this insert fails the project still

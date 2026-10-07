@@ -2,6 +2,7 @@
 
 import { assertProjectOwner } from "@/lib/supabase/authz";
 import { runDirector, type DirectorContext, type DirectorReply } from "@/lib/director";
+import { assertCanAfford, spendCredits } from "@/lib/credits";
 
 export async function interpretCommand(
   projectId: string,
@@ -9,6 +10,10 @@ export async function interpretCommand(
   userMessage: string,
   context: DirectorContext
 ): Promise<DirectorReply> {
-  await assertProjectOwner(projectId);
-  return runDirector(history, userMessage, context);
+  const { supabase } = await assertProjectOwner(projectId);
+  await assertCanAfford(supabase, "ai_chat");
+
+  const reply = await runDirector(history, userMessage, context);
+  await spendCredits(supabase, "ai_chat");
+  return reply;
 }

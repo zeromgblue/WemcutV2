@@ -14,6 +14,7 @@ import { loadAudioBuffer, MAX_ANALYZABLE_DURATION_SECONDS } from "@/lib/audio-lo
 import { refineSubtitleTiming } from "@/lib/refine-subtitle-timing";
 import { encodeSpeechAudio } from "@/lib/extract-audio";
 import type { CanvasSize } from "@/lib/canvas-size";
+import { chargeCredits, checkCredits } from "@/app/actions/credits";
 import { DEFAULT_CLIP_TRANSFORM, clampScale, coverScale, type ClipTransform } from "@/lib/clip-transform";
 import { SUBTITLE_PRESETS } from "@/lib/subtitle-style";
 import type { DirectorAction } from "@/lib/director";
@@ -425,6 +426,7 @@ export function EditorWorkspace({
     setSilenceError(null);
     setRemovingSilence(true);
     try {
+      await checkCredits("remove_silence");
       let next = clips;
       for (const assetId of assetIds) {
         const a = assetsById[assetId];
@@ -444,6 +446,8 @@ export function EditorWorkspace({
       commitClips(next);
       setSelectedClipId(null);
       setPlayhead((p) => Math.min(p, newTotal));
+      // The analysis runs in the browser, so the charge is requested once it has worked.
+      chargeCredits("remove_silence").catch(() => undefined);
     } catch (err) {
       setSilenceError(err instanceof Error ? err.message : "การวิเคราะห์เสียงล้มเหลว");
     } finally {

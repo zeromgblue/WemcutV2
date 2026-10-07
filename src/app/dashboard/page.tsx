@@ -6,6 +6,8 @@ import { getAuthUser } from "@/lib/supabase/server";
 import { logout } from "@/app/actions/auth";
 import { formatRelativeTime } from "@/lib/utils";
 import { landingFonts } from "../fonts";
+import { getCreditCosts, getCreditStatus, getRecentCreditTransactions, INSUFFICIENT_CREDITS_MESSAGE } from "@/lib/credits";
+import { CreditPanel } from "./_components/credit-panel";
 import { NewProjectDialog } from "./_components/new-project-dialog";
 import "../landing.css";
 
@@ -19,11 +21,12 @@ export default async function DashboardPage({
     redirect("/login");
   }
 
-  const { data: projects } = await supabase
-    .from("projects")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("updated_at", { ascending: false });
+  const [{ data: projects }, credits, creditCosts, creditTransactions] = await Promise.all([
+    supabase.from("projects").select("*").eq("user_id", user.id).order("updated_at", { ascending: false }),
+    getCreditStatus(supabase),
+    getCreditCosts(supabase),
+    getRecentCreditTransactions(supabase, 5),
+  ]);
 
   const count = projects?.length ?? 0;
 
@@ -57,6 +60,12 @@ export default async function DashboardPage({
       </header>
 
       <main className="relative max-w-6xl mx-auto px-6 py-14">
+        {credits && (
+          <div className="mb-14">
+            <CreditPanel status={credits} costs={creditCosts} transactions={creditTransactions} />
+          </div>
+        )}
+
         <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="lp-mono text-[11px] tracking-[0.2em]" style={{ color: "var(--lp-red)" }}>
@@ -75,7 +84,7 @@ export default async function DashboardPage({
             className="mt-6 rounded-lg px-4 py-3 text-sm"
             style={{ color: "#ff8a80", border: "1px solid rgba(229,72,59,0.35)", background: "rgba(229,72,59,0.08)" }}
           >
-            สร้างโปรเจกต์ไม่สำเร็จ ลองใหม่อีกครั้ง
+            {error === "no-credits" ? INSUFFICIENT_CREDITS_MESSAGE : "สร้างโปรเจกต์ไม่สำเร็จ ลองใหม่อีกครั้ง"}
           </p>
         )}
 

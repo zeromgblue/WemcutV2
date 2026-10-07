@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { assertProjectOwner } from "@/lib/supabase/authz";
 import { r2Client, R2_BUCKET_NAME, transcriptionAudioKey } from "@/lib/r2/client";
+import { assertCanAfford, spendCredits } from "@/lib/credits";
 import { buildSubtitleLines, isSafeCorrection, type TimedLine, type TimedToken } from "@/lib/subtitle-lines";
 
 const GROQ_TRANSCRIPTION_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
@@ -138,6 +139,7 @@ export async function transcribeAsset(
   audioExtension?: "m4a" | "wav"
 ): Promise<SubtitleSegment[]> {
   const { supabase } = await assertProjectOwner(projectId);
+  await assertCanAfford(supabase, "subtitles");
 
   const { data: asset } = await supabase
     .from("assets")
@@ -212,6 +214,9 @@ export async function transcribeAsset(
       : spoken.map((s) => ({ start: s.start, end: s.end, text: s.text.trim() }));
 
   const corrected = await correctSpelling(lines);
+
+  // Charged only now that the transcript exists, so a failed run costs nothing.
+  await spendCredits(supabase, "subtitles");
 
   return corrected
     .map((line) => ({ assetId, start: line.start, end: line.end, text: line.text.trim() }))
