@@ -2,13 +2,14 @@ import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import type { TimelineClip } from "@/app/actions/timeline";
 import type { SubtitleSegment } from "@/app/actions/subtitles";
 import {
-  SUBTITLE_REFERENCE_HEIGHT,
+  SUBTITLE_REFERENCE_SIZE,
   hexToRgba,
   subtitleAnimationState,
   type SubtitleStyle,
 } from "@/lib/subtitle-style";
 import { subtitleFontFamily } from "@/lib/subtitle-fonts";
 import { DEFAULT_CLIP_TRANSFORM, transformedRect } from "@/lib/clip-transform";
+import type { CanvasSize } from "@/lib/canvas-size";
 import { loadAudioBuffer } from "@/lib/audio-loader";
 
 export type ExportAsset = { id: string; videoUrl: string };
@@ -71,7 +72,7 @@ function drawSubtitle(
   canvasHeight: number,
   elapsedSeconds: number
 ) {
-  const scale = canvasHeight / SUBTITLE_REFERENCE_HEIGHT;
+  const scale = Math.min(canvasWidth, canvasHeight) / SUBTITLE_REFERENCE_SIZE;
   const fontSize = style.fontSize * scale;
   const state = subtitleAnimationState(style.animation, elapsedSeconds);
   if (state.opacity <= 0) return;
@@ -149,12 +150,15 @@ export async function exportVideo({
   assetsById,
   subtitles,
   subtitleStyle,
+  canvas: canvasSize,
   onProgress,
 }: {
   clips: TimelineClip[];
   assetsById: Record<string, ExportAsset>;
   subtitles: SubtitleSegment[];
   subtitleStyle: SubtitleStyle;
+  /** Output frame size; when null it is taken from the first clip's video. */
+  canvas?: CanvasSize | null;
   onProgress?: (seconds: number, totalDuration: number) => void;
 }): Promise<Blob> {
   if (clips.length === 0) throw new Error("ไม่มีคลิปให้ส่งออก");
@@ -194,8 +198,8 @@ export async function exportVideo({
 
   const MAX_WIDTH = 1920;
   const scaleDown = Math.min(1, MAX_WIDTH / video.videoWidth);
-  const width = Math.round(video.videoWidth * scaleDown / 2) * 2;
-  const height = Math.round(video.videoHeight * scaleDown / 2) * 2;
+  const width = canvasSize?.width ?? Math.round(video.videoWidth * scaleDown / 2) * 2;
+  const height = canvasSize?.height ?? Math.round(video.videoHeight * scaleDown / 2) * 2;
 
   const canvas = document.createElement("canvas");
   canvas.width = width;

@@ -3,7 +3,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { assertProjectOwner } from "@/lib/supabase/authz";
-import { r2Client, R2_BUCKET_NAME } from "@/lib/r2/client";
+import { r2Client, R2_BUCKET_NAME, transcriptionAudioKey } from "@/lib/r2/client";
 import { buildSubtitleLines, isSafeCorrection, type TimedLine, type TimedToken } from "@/lib/subtitle-lines";
 
 const GROQ_TRANSCRIPTION_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
@@ -127,9 +127,15 @@ async function correctSpelling(lines: TimedLine[]): Promise<TimedLine[]> {
   return results.flat();
 }
 
+/**
+ * `audioExtension` says the browser has already uploaded an audio-only copy of
+ * the asset (see createTranscriptionAudioUploadUrl); that copy is transcribed
+ * instead of the full video file.
+ */
 export async function transcribeAsset(
   projectId: string,
-  assetId: string
+  assetId: string,
+  audioExtension?: "m4a" | "wav"
 ): Promise<SubtitleSegment[]> {
   const { supabase } = await assertProjectOwner(projectId);
 
@@ -143,22 +149,29 @@ export async function transcribeAsset(
   if (!asset) {
     throw new Error("ไม่พบไฟล์วิดีโอ");
   }
-  if (asset.file_size && asset.file_size > MAX_TRANSCRIBABLE_FILE_SIZE) {
+  if (!audioExtension && asset.file_size && asset.file_size > MAX_TRANSCRIBABLE_FILE_SIZE) {
     throw new Error("วิดีโอมีขนาดใหญ่เกินไปสำหรับการถอดเสียงอัตโนมัติ (จำกัด 25MB)");
   }
   if (!process.env.GROQ_API_KEY) {
     throw new Error("ยังไม่ได้ตั้งค่า GROQ_API_KEY บนเซิร์ฟเวอร์");
   }
 
-  const object = await r2Client.send(
-    new GetObjectCommand({ Bucket: R2_BUCKET_NAME, Key: asset.storage_key })
-  );
+  // The key is rebuilt from the verified project and asset ids, never taken from the client.
+  const sourceKey =
+    audioExtension === "m4a" || audioExtension === "wav"
+      ? transcriptionAudioKey(projectId, assetId, audioExtension)
+      : asset.storage_key;
+
+  const object = await r2Client.send(new GetObjectCommand({ Bucket: R2_BUCKET_NAME, Key: sourceKey }));
   const bytes = await object.Body?.transformToByteArray();
   if (!bytes) {
     throw new Error("ไม่สามารถโหลดไฟล์วิดีโอจากที่จัดเก็บได้");
   }
+  if (bytes.length > MAX_TRANSCRIBABLE_FILE_SIZE) {
+    throw new Error("เสียงในวิดีโอยาวเกินไปสำหรับการถอดเสียงอัตโนมัติ");
+  }
 
-  const extension = asset.storage_key.split(".").pop() || "mp4";
+  const extension = sourceKey.split(".").pop() || "mp4";
 
   const form = new FormData();
   form.append("file", new Blob([Buffer.from(bytes)]), `audio.${extension}`);

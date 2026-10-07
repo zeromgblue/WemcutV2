@@ -325,7 +325,11 @@ export function PreviewPanel({
                   onPointerDown={handleSubtitlePointerDown}
                   className="block text-center cursor-grab active:cursor-grabbing touch-none select-none pointer-events-auto"
                   style={{
-                    ...subtitleTextStyle(subtitleStyle, subtitleFontFamily(subtitleStyle.fontFamily), frameHeight),
+                    ...subtitleTextStyle(
+                      subtitleStyle,
+                      subtitleFontFamily(subtitleStyle.fontFamily),
+                      Math.min(frameWidth, frameHeight)
+                    ),
                     ...subtitleAnimationStyle(subtitleStyle.animation),
                   }}
                 >

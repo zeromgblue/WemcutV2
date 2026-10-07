@@ -4,7 +4,7 @@ import { SUBTITLE_FONTS } from "./subtitle-fonts";
 export type SubtitleStyle = {
   /** A `value` from SUBTITLE_FONTS. */
   fontFamily: string;
-  /** Font size in px on a 720px-tall frame; scales with the frame. */
+  /** Font size in px on a frame whose shorter side is 720px; scales with the frame. */
   fontSize: number;
   color: string;
   backgroundColor: string;
@@ -15,11 +15,11 @@ export type SubtitleStyle = {
   /** An `id` from SUBTITLE_ANIMATIONS. */
   animation: string;
   bold: boolean;
-  /** Outline thickness in px on a 720px-tall frame; 0 turns it off. */
+  /** Outline thickness, on the same scale as fontSize; 0 turns it off. */
   outlineWidth: number;
   outlineColor: string;
   shadow: boolean;
-  /** Corner radius of the background box, in px on a 720px-tall frame. */
+  /** Corner radius of the background box, on the same scale as fontSize. */
   boxRadius: number;
 };
 
@@ -39,8 +39,10 @@ export const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
   boxRadius: 8,
 };
 
-/** The frame height that fontSize/outlineWidth/boxRadius are expressed against. */
-export const SUBTITLE_REFERENCE_HEIGHT = 720;
+/** fontSize, outlineWidth and boxRadius are in px on a frame whose shorter side
+ * is this long. Using the shorter side keeps text the same size relative to
+ * the frame whether the project is horizontal or vertical. */
+export const SUBTITLE_REFERENCE_SIZE = 720;
 
 // ─── Animations ───────────────────────────────────────────
 // Every animation is an entrance: the line starts in the `from` state and
@@ -218,9 +220,9 @@ export function hexToRgba(hex: string, alpha: number): string {
 }
 
 /** Inline style for a subtitle line (everything except position and animation).
- * `frameHeight` is the height of the frame it is drawn on, in px. */
-export function subtitleTextStyle(style: SubtitleStyle, fontFamily: string, frameHeight: number): CSSProperties {
-  const scale = frameHeight / SUBTITLE_REFERENCE_HEIGHT;
+ * `frameShortSide` is the shorter side of the frame it is drawn on, in px. */
+export function subtitleTextStyle(style: SubtitleStyle, fontFamily: string, frameShortSide: number): CSSProperties {
+  const scale = frameShortSide / SUBTITLE_REFERENCE_SIZE;
   const outline = style.outlineWidth * scale;
   return {
     fontFamily,

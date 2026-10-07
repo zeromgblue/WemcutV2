@@ -131,16 +131,11 @@ export type DirectorContext = {
   videoTransform: { x: number; y: number; scale: number } | null;
 };
 
-function buildSystemPrompt(ctx: DirectorContext) {
-  return `คุณคือ "ผู้กำกับ AI" ผู้ช่วยตัดต่อวิดีโอในแอป WemCut คุณทำงานโดยเรียกเครื่องมือของตัวแก้ไขแทนผู้ใช้
+// The system prompt and tool list never change between requests, so they are
+// cached; the editor's current state goes in the user turn instead.
+const SYSTEM_PROMPT = `คุณคือ "ผู้กำกับ AI" ผู้ช่วยตัดต่อวิดีโอในแอป WemCut คุณทำงานโดยเรียกเครื่องมือของตัวแก้ไขแทนผู้ใช้
 
-สถานะปัจจุบันของโปรเจกต์:
-- จำนวนคลิป: ${ctx.clipCount}
-- ความยาวรวม: ${ctx.totalDuration.toFixed(1)} วินาที
-- เพลย์เฮด: ${ctx.playhead.toFixed(1)} วินาที (${ctx.isPlaying ? "กำลังเล่น" : "หยุดอยู่"})
-- ซับไตเติล: ${ctx.subtitleCount > 0 ? `${ctx.subtitleCount} บรรทัด` : "ยังไม่มี"}
-- สไตล์ซับไตเติล: ${JSON.stringify(ctx.subtitleStyle)}
-- การซูม/ตำแหน่งของคลิปปัจจุบัน: ${ctx.videoTransform ? JSON.stringify(ctx.videoTransform) : "ไม่มีคลิป"}
+ข้อความล่าสุดของผู้ใช้จะมีสถานะปัจจุบันของโปรเจกต์แนบมาในแท็ก <editor_state> ใช้ข้อมูลนั้นประกอบการตัดสินใจ แต่อย่าพูดถึงแท็กนี้กับผู้ใช้
 
 วิธีทำงาน:
 - ถ้าคำขอทำได้ด้วยเครื่องมือ ให้เรียกเครื่องมือทันทีโดยไม่ต้องขออนุญาตหรือบอกแผนก่อน คำขอที่มีหลายอย่างให้เรียกเครื่องมือให้ครบทุกอย่าง
@@ -150,6 +145,16 @@ function buildSystemPrompt(ctx: DirectorContext) {
 - สิ่งที่ยังทำไม่ได้: หาไฮไลต์อัตโนมัติ, เสียงพากย์ AI, ใส่เพลงหรือเสียงประกอบ, ใส่รูปภาพหรือข้อความอื่นนอกจากซับไตเติล, อัปโหลดไฟล์แทนผู้ใช้ ถ้าถูกขอ ให้บอกตรงๆ ว่ายังไม่รองรับ อย่าทำเป็นว่าทำสำเร็จ
 - ถ้าคำขอกำกวม ให้ถามกลับสั้นๆ แทนการเดา
 - ตอบเป็นภาษาไทย ใช้สรรพนาม "ผม" และลงท้าย "ครับ" กระชับไม่เกิน 2 ประโยค เป็นข้อความธรรมดา ไม่ใช้อีโมจิ หัวข้อ หรือรายการ`;
+
+function describeEditorState(ctx: DirectorContext) {
+  return `<editor_state>
+- จำนวนคลิป: ${ctx.clipCount}
+- ความยาวรวม: ${ctx.totalDuration.toFixed(1)} วินาที
+- เพลย์เฮด: ${ctx.playhead.toFixed(1)} วินาที (${ctx.isPlaying ? "กำลังเล่น" : "หยุดอยู่"})
+- ซับไตเติล: ${ctx.subtitleCount > 0 ? `${ctx.subtitleCount} บรรทัด` : "ยังไม่มี"}
+- สไตล์ซับไตเติล: ${JSON.stringify(ctx.subtitleStyle)}
+- การซูม/ตำแหน่งของคลิปปัจจุบัน: ${ctx.videoTransform ? JSON.stringify(ctx.videoTransform) : "ไม่มีคลิป"}
+</editor_state>`;
 }
 
 export type DirectorAction =
@@ -265,12 +270,16 @@ const MAX_TURNS = 8;
 export async function runDirector(
   history: { role: "user" | "assistant"; content: string }[],
   userMessage: string,
-  context: DirectorContext
+  context: DirectorContext,
+  /** Called with the token usage of each model call, e.g. for cost accounting. */
+  onUsage?: (usage: Anthropic.Usage) => void
 ): Promise<DirectorReply> {
   const client = new Anthropic();
   const messages: Anthropic.MessageParam[] = [
     ...history.map((m) => ({ role: m.role, content: m.content })),
-    { role: "user", content: userMessage },
+    { role: "user", content: `${describeEditorState(context)}
+
+${userMessage}` },
   ];
 
   const actions: DirectorAction[] = [];
@@ -280,11 +289,14 @@ export async function runDirector(
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 2048,
-      system: buildSystemPrompt(context),
+      // The breakpoint on the system prompt caches the tool list along with it.
+      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       tools,
       tool_choice: { type: "auto" },
       messages,
     });
+
+    onUsage?.(response.usage);
 
     const text = response.content
       .filter((block) => block.type === "text")

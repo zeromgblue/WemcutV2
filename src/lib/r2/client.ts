@@ -10,3 +10,8 @@ export const r2Client = new S3Client({
     secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY!,
   },
 });
+
+/** Storage key for the audio-only copy of an asset that is sent for transcription. */
+export function transcriptionAudioKey(projectId: string, assetId: string, extension: "m4a" | "wav") {
+  return `projects/${projectId}/transcription/${assetId}.${extension}`;
+}

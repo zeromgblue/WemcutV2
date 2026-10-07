@@ -21,8 +21,8 @@ const POSITION_PRESETS: { label: string; x: number; y: number }[] = [
 
 const FONT_GROUPS: SubtitleFont["group"][] = ["ทันสมัย", "เป็นกันเอง", "ลายมือ", "ทางการ"];
 
-// Sample tiles render the subtitle style on a small frame of this height.
-const SAMPLE_FRAME_HEIGHT = 420;
+// Sample tiles render the subtitle style as it would look on a frame this small.
+const SAMPLE_FRAME_SIZE = 420;
 // How often the animation samples replay.
 const REPLAY_INTERVAL_MS = 2200;
 
@@ -111,7 +111,7 @@ export function SubtitleStylePanel({
     onChange({ ...style, [key]: value });
   }
 
-  const sampleStyle = subtitleTextStyle(style, subtitleFontFamily(style.fontFamily), SAMPLE_FRAME_HEIGHT);
+  const sampleStyle = subtitleTextStyle(style, subtitleFontFamily(style.fontFamily), SAMPLE_FRAME_SIZE);
 
   return (
     <div className="relative">
@@ -152,7 +152,7 @@ export function SubtitleStylePanel({
                           ...subtitleTextStyle(
                             { ...style, ...preset.style, fontSize: 20 },
                             subtitleFontFamily(preset.style.fontFamily ?? style.fontFamily),
-                            SAMPLE_FRAME_HEIGHT
+                            SAMPLE_FRAME_SIZE
                           ),
                           padding: "0.15em 0.35em",
                         }}

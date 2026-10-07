@@ -5,6 +5,7 @@ import { assertProjectOwner } from "@/lib/supabase/authz";
 import type { SubtitleSegment } from "./subtitles";
 import { DEFAULT_SUBTITLE_STYLE, type SubtitleStyle } from "@/lib/subtitle-style";
 import type { ClipTransform } from "@/lib/clip-transform";
+import type { CanvasSize } from "@/lib/canvas-size";
 
 export type TimelineClip = {
   id: string;
@@ -19,7 +20,8 @@ export async function saveTimeline(
   projectId: string,
   clips: TimelineClip[],
   subtitles: SubtitleSegment[] = [],
-  subtitleStyle: SubtitleStyle = DEFAULT_SUBTITLE_STYLE
+  subtitleStyle: SubtitleStyle = DEFAULT_SUBTITLE_STYLE,
+  canvas: CanvasSize | null = null
 ) {
   const { supabase } = await assertProjectOwner(projectId);
 
@@ -36,7 +38,7 @@ export async function saveTimeline(
   const { error } = await supabase.from("timelines").insert({
     project_id: projectId,
     version: nextVersion,
-    timeline_json: { clips, subtitles, subtitleStyle },
+    timeline_json: { clips, subtitles, subtitleStyle, ...(canvas ? { canvas } : {}) },
   });
 
   if (error) {

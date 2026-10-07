@@ -6,6 +6,7 @@ import { r2Client, R2_BUCKET_NAME } from "@/lib/r2/client";
 import type { TimelineClip } from "@/app/actions/timeline";
 import type { SubtitleSegment } from "@/app/actions/subtitles";
 import { DEFAULT_SUBTITLE_STYLE, migrateSubtitleStyle, type SubtitleStyle } from "@/lib/subtitle-style";
+import { parseCanvasSize } from "@/lib/canvas-size";
 import { EditorWorkspace } from "./_components/editor-workspace";
 
 export default async function EditorPage({ params }: PageProps<"/editor/[id]">) {
@@ -53,6 +54,11 @@ export default async function EditorPage({ params }: PageProps<"/editor/[id]">) 
       ? migrateSubtitleStyle(rawSubtitleStyle as Record<string, unknown>)
       : DEFAULT_SUBTITLE_STYLE;
 
+  // Projects made before sizes could be chosen have no canvas; the editor
+  // then takes the frame size from the first video.
+  const rawCanvas = timeline?.timeline_json?.canvas;
+  const canvas = rawCanvas ? parseCanvasSize(rawCanvas.width, rawCanvas.height) : null;
+
   const editorAssets = await Promise.all(
     (assets ?? []).map(async (a) => ({
       id: a.id as string,
@@ -73,6 +79,7 @@ export default async function EditorPage({ params }: PageProps<"/editor/[id]">) 
       initialClips={initialClips}
       initialSubtitles={initialSubtitles}
       initialSubtitleStyle={initialSubtitleStyle}
+      canvas={canvas}
     />
   );
 }

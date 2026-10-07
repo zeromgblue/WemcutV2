@@ -3,10 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { saveTimeline, type TimelineClip } from "@/app/actions/timeline";
 import { transcribeAsset, type SubtitleSegment } from "@/app/actions/subtitles";
-import { createUploadUrl, confirmAssetUpload, getAssetPlaybackUrl } from "@/app/actions/assets";
+import {
+  createUploadUrl,
+  confirmAssetUpload,
+  createTranscriptionAudioUploadUrl,
+  getAssetPlaybackUrl,
+} from "@/app/actions/assets";
 import { probeDuration } from "@/lib/probe-duration";
 import { loadAudioBuffer, MAX_ANALYZABLE_DURATION_SECONDS } from "@/lib/audio-loader";
 import { refineSubtitleTiming } from "@/lib/refine-subtitle-timing";
+import { encodeSpeechAudio } from "@/lib/extract-audio";
+import type { CanvasSize } from "@/lib/canvas-size";
 import { DEFAULT_CLIP_TRANSFORM, clampScale, coverScale, type ClipTransform } from "@/lib/clip-transform";
 import { SUBTITLE_PRESETS } from "@/lib/subtitle-style";
 import type { DirectorAction } from "@/lib/director";
@@ -57,6 +64,7 @@ export function EditorWorkspace({
   initialClips,
   initialSubtitles,
   initialSubtitleStyle,
+  canvas,
 }: {
   projectId: string;
   projectName: string;
@@ -64,6 +72,8 @@ export function EditorWorkspace({
   initialClips: TimelineClip[];
   initialSubtitles: SubtitleSegment[];
   initialSubtitleStyle: SubtitleStyle;
+  /** The project's chosen frame size, or null for projects created before sizes existed. */
+  canvas: CanvasSize | null;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [projectName, setProjectName] = useState(initialProjectName);
@@ -190,8 +200,10 @@ export function EditorWorkspace({
   const currentClip = locate(clips, playhead)?.clip ?? clips[clips.length - 1] ?? null;
   const currentTransform = currentClip ? (currentClip.transform ?? DEFAULT_CLIP_TRANSFORM) : null;
 
-  // The output frame takes the shape of the first clip's video, as the export does.
-  const frameSource = assetDimensions[clips[0]?.assetId ?? ""] ?? (activeAssetId ? assetDimensions[activeAssetId] : undefined);
+  // The output frame is the project's chosen size. Projects without one take
+  // the shape of the first clip's video, as the export does.
+  const frameSource =
+    canvas ?? assetDimensions[clips[0]?.assetId ?? ""] ?? (activeAssetId ? assetDimensions[activeAssetId] : undefined);
   const frameAspect = frameSource ? frameSource.width / frameSource.height : 16 / 9;
 
   const pendingSourceSeek = useRef<{ sourceTime: number; shouldPlay: boolean } | null>(null);
@@ -450,13 +462,31 @@ export function EditorWorkspace({
     try {
       const results = await Promise.all(
         assetIds.map(async (id) => {
-          // Decode the audio while the transcript is being made, then snap each
-          // line to where speech really starts and stops. If the audio can't be
-          // analysed, the transcript's own timing is still good enough to use.
+          // The decoded audio is used twice: to make a small file to transcribe,
+          // and afterwards to snap each line to where speech starts and stops.
           const url = assetsById[id]?.videoUrl;
-          const audio = url ? loadAudioBuffer(url).catch(() => null) : Promise.resolve(null);
-          const segments = await transcribeAsset(projectId, id);
-          const buffer = await audio;
+          const buffer = url ? await loadAudioBuffer(url).catch(() => null) : null;
+
+          // Send only the audio for transcription: it is a fraction of the
+          // video's size, so long videos stay under the service's upload limit.
+          // If that fails, the server falls back to the video file itself.
+          let audioExtension: "m4a" | "wav" | undefined;
+          if (buffer) {
+            try {
+              const audio = await encodeSpeechAudio(buffer);
+              const { uploadUrl } = await createTranscriptionAudioUploadUrl(projectId, id, audio.extension);
+              const res = await fetch(uploadUrl, {
+                method: "PUT",
+                headers: { "Content-Type": audio.contentType },
+                body: audio.blob,
+              });
+              if (res.ok) audioExtension = audio.extension;
+            } catch (err) {
+              console.error("Audio extraction for transcription failed", err);
+            }
+          }
+
+          const segments = await transcribeAsset(projectId, id, audioExtension);
           return buffer ? refineSubtitleTiming(segments, buffer) : segments;
         })
       );
@@ -527,12 +557,12 @@ export function EditorWorkspace({
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      await saveTimeline(projectId, clips, subtitles, subtitleStyle);
+      await saveTimeline(projectId, clips, subtitles, subtitleStyle, canvas);
       setDirty(false);
     } finally {
       setSaving(false);
     }
-  }, [projectId, clips, subtitles, subtitleStyle]);
+  }, [projectId, clips, subtitles, subtitleStyle, canvas]);
 
   const handleExport = useCallback(async () => {
     if (clips.length === 0) return;
@@ -545,6 +575,7 @@ export function EditorWorkspace({
         assetsById,
         subtitles,
         subtitleStyle,
+        canvas,
         onProgress: (seconds, total) => setExportProgress(total > 0 ? seconds / total : 0),
       });
       const url = URL.createObjectURL(blob);
@@ -560,7 +591,7 @@ export function EditorWorkspace({
     } finally {
       setExporting(false);
     }
-  }, [clips, assetsById, subtitles, subtitleStyle, projectName]);
+  }, [clips, assetsById, subtitles, subtitleStyle, projectName, canvas]);
 
   // Runs one command from the AI chat. The chat runs several in a row, so it
   // calls through a ref and always gets the handlers from the latest render.
